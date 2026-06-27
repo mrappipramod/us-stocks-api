@@ -6,7 +6,7 @@ on:
     - cron: '0 11 * * 1-5'
     # End-of-day: 4:30 PM ET Mon-Fri (21:30 UTC)
     - cron: '30 21 * * 1-5'
-  workflow_dispatch:          # also allow manual trigger from GitHub UI
+  workflow_dispatch:
     inputs:
       limit:
         description: 'Max tickers (leave blank for full scan)'
@@ -14,6 +14,10 @@ on:
       tickers:
         description: 'Specific tickers (comma-separated, overrides limit)'
         required: false
+
+# ── Give the workflow write access to push back to the repo ──
+permissions:
+  contents: write
 
 jobs:
   scan:
@@ -23,6 +27,9 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          # Use the built-in GITHUB_TOKEN so the push step is authenticated
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -33,7 +40,19 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run scanner (manual with specific tickers)
+      # ── Make sure scanner_output/ is NOT gitignored ──
+      - name: Unblock scanner_output from .gitignore
+        run: |
+          if grep -q "scanner_output" .gitignore 2>/dev/null; then
+            # Add a negation rule so git tracks the JSON files inside it
+            echo "!scanner_output/latest.json" >> .gitignore
+            echo "!scanner_output/top_picks_latest.json" >> .gitignore
+            echo "Updated .gitignore to allow latest JSON files"
+          fi
+          # Create the directory so the scanner can write to it
+          mkdir -p scanner_output
+
+      - name: Run scanner (manual — specific tickers)
         if: github.event.inputs.tickers != ''
         env:
           PROXY_BASE: ${{ secrets.PROXY_BASE }}
@@ -43,7 +62,7 @@ jobs:
             --tickers "${{ github.event.inputs.tickers }}" \
             --concurrency 3
 
-      - name: Run scanner (manual with limit)
+      - name: Run scanner (manual — with limit)
         if: github.event.inputs.limit != '' && github.event.inputs.tickers == ''
         env:
           PROXY_BASE: ${{ secrets.PROXY_BASE }}
@@ -52,6 +71,16 @@ jobs:
           python nasdaq_scanner.py \
             --limit "${{ github.event.inputs.limit }}" \
             --concurrency 3
+
+      - name: Run scanner (manual — no inputs, full scan)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.limit == '' && github.event.inputs.tickers == ''
+        env:
+          PROXY_BASE: ${{ secrets.PROXY_BASE }}
+          OUTPUT_DIR: ./scanner_output
+        run: |
+          python nasdaq_scanner.py \
+            --concurrency 4 \
+            --csv nasdaq-listed.csv
 
       - name: Run full scanner (scheduled)
         if: github.event_name == 'schedule'
@@ -70,10 +99,19 @@ jobs:
           path: scanner_output/
           retention-days: 30
 
-      - name: Commit latest.json back to repo
+      - name: Commit latest JSON back to repo
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add scanner_output/latest.json scanner_output/top_picks_latest.json || true
-          git diff --staged --quiet || git commit -m "scanner: update latest results [skip ci]"
-          git push || true
+
+          # Force-add even if gitignored
+          git add -f scanner_output/latest.json
+          git add -f scanner_output/top_picks_latest.json
+
+          # Only commit if there are actual changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "scanner: update results $(date -u '+%Y-%m-%d %H:%M UTC') [skip ci]"
+            git push
+          fi
