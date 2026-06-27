@@ -646,6 +646,8 @@ def run_scan(tickers: list[tuple[str, str]], concurrency: int = 3,
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def main():
+    global PROXY_BASE, OUTPUT_DIR, CSV_PATH  # must be first before any reference
+
     parser = argparse.ArgumentParser(description="NASDAQ Stock Scanner via /api/yahoo proxy")
     parser.add_argument("--csv",         default=str(CSV_PATH),  help="Path to nasdaq-listed.csv")
     parser.add_argument("--limit",       type=int,               help="Max tickers to scan (for testing)")
@@ -657,7 +659,6 @@ def main():
     parser.add_argument("--output-dir",  type=str,               help="Override output directory")
     args = parser.parse_args()
 
-    global PROXY_BASE, OUTPUT_DIR, CSV_PATH
     if args.proxy:      PROXY_BASE  = args.proxy
     if args.output_dir: OUTPUT_DIR  = Path(args.output_dir)
     if args.csv:        CSV_PATH    = Path(args.csv)
