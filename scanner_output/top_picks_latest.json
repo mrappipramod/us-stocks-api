@@ -1,13 +1,13 @@
 {
   "meta": {
-    "scanned_at": "2026-06-29T22:51:50.482275+00:00",
-    "elapsed_seconds": 864.4,
+    "scanned_at": "2026-06-30T13:19:14.045115+00:00",
+    "elapsed_seconds": 981.3,
     "total_scanned": 2830,
     "total_errors": 2,
     "strong_buy": 0,
     "buy": 0,
-    "hold": 1542,
-    "avoid": 1288,
+    "hold": 1546,
+    "avoid": 1284,
     "proxy_base": "https://champ.iamnewuser.com/api/yahoo"
   },
   "results": []
